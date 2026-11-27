@@ -1,0 +1,2 @@
+# Helper package for the DAGs. It holds no DAGs, so the DAG processor skips it.
+shopper_segments/

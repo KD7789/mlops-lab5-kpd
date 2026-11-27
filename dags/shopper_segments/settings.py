@@ -40,3 +40,8 @@ MIN_TRAIN_ROWS = 500
 ALGORITHMS = ["kmeans", "gmm"]
 RANDOM_STATE = 42
 SILHOUETTE_SAMPLE = 10_000  # silhouette is O(n^2), so larger datasets are sampled
+
+# The Airflow Asset the training DAG updates when it promotes a model, and the
+# scoring DAG is scheduled on. Plain strings here; the DAG files build the Asset.
+CHAMPION_ASSET_NAME = "shopper_segment_champion"
+CHAMPION_ASSET_URI = "file:///opt/airflow/artifacts/models/champion.json"

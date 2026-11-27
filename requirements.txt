@@ -1,0 +1,6 @@
+# pandas, numpy and scikit-learn already ship with apache/airflow:3.4.0 at
+# these versions; pinning them keeps the image the same if the base changes.
+pandas==3.1.0
+numpy==2.5.4
+scikit-learn==1.9.1
+pytest==9.2.0

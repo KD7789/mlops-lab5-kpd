@@ -1,0 +1,4 @@
+# The image only needs requirements.txt. The DAGs, data and tests are mounted
+# into the containers at runtime (see docker-compose.yaml).
+*
+!requirements.txt

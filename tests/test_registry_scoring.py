@@ -37,3 +37,18 @@ def test_summarize_new_sessions(sessions, train_sample):
     assert [s["segment"] for s in summary["segments"]] == [0, 1, 2, 3]
     assert sum(s["sessions"] for s in summary["segments"]) == len(new)
     assert sum(s["share"] for s in summary["segments"]) == pytest.approx(1, abs=1e-3)
+
+
+def test_load_version(tmp_path, train_sample):
+    pipeline, metrics = modeling.fit_candidate(train_sample, "kmeans", 4)
+    model_path = registry.run_dir(tmp_path, "run1") / "candidates" / "kmeans_k4.joblib"
+    registry.save_model(pipeline, model_path)
+    registry.promote(tmp_path, model_path, {**metrics, "run_id": "run1"})
+    registry.promote(tmp_path, model_path, {**metrics, "run_id": "run2"})
+
+    model, metadata = registry.load_version(tmp_path, "v1")
+
+    assert (metadata["version"], metadata["run_id"]) == ("v1", "run1")
+    assert len(model.predict(train_sample[settings.FEATURES])) == len(train_sample)
+    with pytest.raises(FileNotFoundError):
+        registry.version_metadata(tmp_path, "v9")

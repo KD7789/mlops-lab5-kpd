@@ -101,3 +101,17 @@ def promote(artifacts_dir, model_path, metadata: dict) -> dict:
     write_json(target / "metadata.json", record)
     write_json(champion_file(artifacts_dir), record)
     return record
+
+
+def version_metadata(artifacts_dir, version: str) -> dict:
+    """The metadata saved when a version (e.g. "v2") was promoted."""
+    metadata = read_json(Path(artifacts_dir) / "models" / "history" / version / "metadata.json")
+    if metadata is None:
+        raise FileNotFoundError(f"no promoted model called {version}")
+    return metadata
+
+
+def load_version(artifacts_dir, version: str):
+    """A promoted model by version, with its metadata."""
+    metadata = version_metadata(artifacts_dir, version)
+    return load_model(Path(artifacts_dir) / metadata["model_file"]), metadata

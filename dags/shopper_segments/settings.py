@@ -45,3 +45,5 @@ SILHOUETTE_SAMPLE = 10_000  # silhouette is O(n^2), so larger datasets are sampl
 # scoring DAG is scheduled on. Plain strings here; the DAG files build the Asset.
 CHAMPION_ASSET_NAME = "shopper_segment_champion"
 CHAMPION_ASSET_URI = "file:///opt/airflow/artifacts/models/champion.json"
+SCORES_ASSET_NAME = "shopper_segment_scores"
+SCORES_ASSET_URI = "file:///opt/airflow/artifacts/scoring/latest.json"

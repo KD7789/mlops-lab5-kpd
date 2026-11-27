@@ -39,3 +39,14 @@ def test_training_dag_settings(dagbag):
     assert set(dag.params) == {"k_min", "k_max", "algorithms", "min_silhouette", "source_file"}
     assert dag.get_task("model_search.train_candidate").max_active_tis_per_dagrun == 3
     assert [a.name for a in dag.get_task("promotion.promote_model").outlets] == ["shopper_segment_champion"]
+
+
+def test_scoring_dag_runs_on_new_champions(dagbag):
+    dag = dagbag.dags["shopper_segments_scoring"]
+    tasks = {"pick_model_version", "load_new_sessions", "score_sessions", "summarize_segments"}
+    assert set(dag.task_ids) == tasks
+    # Scheduled on the champion Asset instead of a clock, and switched on from the start.
+    assert type(dag.timetable).__name__ == "AssetTriggeredTimetable"
+    assert "shopper_segment_champion" in repr(dag.timetable.asset_condition)
+    assert dag.is_paused_upon_creation is False
+    assert [a.name for a in dag.get_task("summarize_segments").outlets] == ["shopper_segment_scores"]

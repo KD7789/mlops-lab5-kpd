@@ -22,11 +22,14 @@ Files go to `artifacts/runs/<run_id>/`. Only small metadata travels in XCom.
 import logging
 from datetime import datetime, timedelta, timezone
 
-import pandas as pd
 from airflow.providers.standard.operators.hitl import ApprovalOperator
 from airflow.sdk import Asset, Param, dag, get_current_context, task, task_group
 
-from shopper_segments import data, modeling, registry, settings
+from shopper_segments import settings  # paths and constants only, so it imports instantly
+
+# pandas, scikit-learn and the rest of shopper_segments are imported inside the
+# tasks that need them. The DAG processor re-parses this file every 30 seconds,
+# so heavy imports at the top would slow every parse and hold their memory.
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +38,8 @@ CHAMPION = Asset(name=settings.CHAMPION_ASSET_NAME, uri=settings.CHAMPION_ASSET_
 
 def run_folder():
     """This run's folder under artifacts/runs/."""
+    from shopper_segments import registry
+
     return registry.run_dir(settings.ARTIFACTS_DIR, get_current_context()["run_id"])
 
 
@@ -45,6 +50,8 @@ def relative(path) -> str:
 @task
 def validate_data() -> dict:
     """Run the data checks and save the report as validation.json."""
+    from shopper_segments import data, registry
+
     source = settings.DATA_DIR / get_current_context()["params"]["source_file"]
     report = data.validate_sessions(data.load_sessions(source))
     report["source_file"] = source.name
@@ -71,6 +78,8 @@ def quarantine_batch(report: dict) -> None:
 @task
 def prepare_training_data() -> dict:
     """Drop duplicate rows, keep the training months and save them as train.csv."""
+    from shopper_segments import data
+
     params = get_current_context()["params"]
     sessions = data.clean_sessions(data.load_sessions(settings.DATA_DIR / params["source_file"]))
     train = data.split_by_month(sessions, settings.TRAIN_MONTHS)
@@ -83,6 +92,8 @@ def prepare_training_data() -> dict:
 @task
 def plan_candidates(prepared: dict) -> list[dict]:
     """Turn the trigger-form choices into one (algorithm, k) spec per candidate."""
+    from shopper_segments import modeling
+
     params = get_current_context()["params"]
     specs = modeling.candidate_grid(params["algorithms"], params["k_min"], params["k_max"])
     log.info("%d candidates to train on %d sessions", len(specs), prepared["rows"])
@@ -92,6 +103,10 @@ def plan_candidates(prepared: dict) -> list[dict]:
 @task(map_index_template="{{ candidate_label }}", max_active_tis_per_dagrun=3)
 def train_candidate(spec: dict, prepared: dict) -> dict:
     """Train and score one candidate. Each one is a separate mapped task instance."""
+    import pandas as pd
+
+    from shopper_segments import modeling, registry
+
     context = get_current_context()
     context["candidate_label"] = f"{spec['algorithm']} k={spec['k']}"  # name shown in the UI
     train = pd.read_csv(settings.ARTIFACTS_DIR / prepared["train_file"])
@@ -105,6 +120,10 @@ def train_candidate(spec: dict, prepared: dict) -> dict:
 @task
 def select_best(results, prepared: dict) -> dict:
     """Pick the highest silhouette, describe its segments and save selection.json."""
+    import pandas as pd
+
+    from shopper_segments import modeling, registry
+
     results = sorted(results, key=lambda r: -r["silhouette"])
     best = dict(modeling.pick_best(results))
     train = pd.read_csv(settings.ARTIFACTS_DIR / prepared["train_file"])
@@ -140,6 +159,10 @@ def review_markdown(best: dict, decision: dict, min_silhouette: float) -> str:
 @task.branch
 def check_gate(best: dict, prepared: dict) -> str:
     """Ask for approval only if the winner passes the minimum and beats the champion."""
+    import pandas as pd
+
+    from shopper_segments import modeling, registry
+
     context = get_current_context()
     min_silhouette = context["params"]["min_silhouette"]
     champion = registry.read_champion(settings.ARTIFACTS_DIR)
@@ -161,6 +184,8 @@ def check_gate(best: dict, prepared: dict) -> str:
 @task(outlets=[CHAMPION])
 def promote_model(best: dict, prepared: dict) -> dict:
     """Make the approved candidate the champion. Updating the Asset starts the scoring DAG."""
+    from shopper_segments import registry
+
     context = get_current_context()
     ti = context["ti"]
     decision = ti.xcom_pull(task_ids="promotion.check_gate", key="decision")
@@ -192,6 +217,8 @@ def keep_champion() -> None:
 @task(trigger_rule="none_failed")
 def write_run_summary() -> dict:
     """Record the outcome in summary.json. Runs after either promotion path, or when both were skipped."""
+    from shopper_segments import registry
+
     context = get_current_context()
     ti = context["ti"]
     report = ti.xcom_pull(task_ids="validate_data")
